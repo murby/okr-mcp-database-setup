@@ -325,3 +325,38 @@ export async function deleteObjective(id: string): Promise<void> {
 
   await batch.commit();
 }
+
+// Convert Firestore document data to ProgressUpdate interface
+const docToProgressUpdate = (doc: any): ProgressUpdate => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    keyResultId: data.keyResultId,
+    objectiveId: data.objectiveId,
+    value: data.value,
+    note: data.note || '',
+    updatedBy: data.updatedBy || '',
+    timestamp: toDate(data.timestamp),
+  };
+};
+
+// Retrieve progress update history for a key result, sorted chronologically in memory
+export async function getKeyResultHistory(keyResultId: string): Promise<ProgressUpdate[]> {
+  const snapshot = await db.collection('progress_updates')
+    .where('keyResultId', '==', keyResultId)
+    .get();
+
+  const updates = snapshot.docs.map(docToProgressUpdate);
+  return updates.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+}
+
+// Retrieve progress update history for an objective (all its key results), sorted chronologically in memory
+export async function getObjectiveHistory(objectiveId: string): Promise<ProgressUpdate[]> {
+  const snapshot = await db.collection('progress_updates')
+    .where('objectiveId', '==', objectiveId)
+    .get();
+
+  const updates = snapshot.docs.map(docToProgressUpdate);
+  return updates.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+}
+

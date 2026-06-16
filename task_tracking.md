@@ -8,3 +8,5 @@
 - [x] Implement src/index.ts
 - [x] Create README.md with configuration guides
 - [x] Run verification scripts
+- [x] Implement historical progress update history queries and MCP tool
+

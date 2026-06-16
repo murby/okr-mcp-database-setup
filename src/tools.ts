@@ -178,6 +178,34 @@ export const TOOLS = [
       properties: {},
     },
   },
+  {
+    name: 'get_key_result_history',
+    description: 'Retrieve the chronological history of progress updates and notes for a specific Key Result.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        keyResultId: {
+          type: 'string',
+          description: 'The unique ID of the key result',
+        },
+      },
+      required: ['keyResultId'],
+    },
+  },
+  {
+    name: 'get_objective_history',
+    description: 'Retrieve the chronological history of all progress updates and notes for all Key Results under an Objective.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        objectiveId: {
+          type: 'string',
+          description: 'The unique ID of the objective',
+        },
+      },
+      required: ['objectiveId'],
+    },
+  },
 ];
 
 // Handles tool calls and maps to db operations
@@ -301,6 +329,30 @@ export async function handleToolCall(name: string, args: any): Promise<any> {
             {
               type: 'text',
               text: JSON.stringify(departments, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'get_key_result_history': {
+        const history = await db.getKeyResultHistory(args.keyResultId);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(history, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'get_objective_history': {
+        const history = await db.getObjectiveHistory(args.objectiveId);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(history, null, 2),
             },
           ],
         };

@@ -5,6 +5,8 @@ import {
   getObjective,
   listObjectives,
   deleteObjective,
+  getKeyResultHistory,
+  getObjectiveHistory,
 } from '../src/db.js';
 
 async function runTests() {
@@ -90,6 +92,21 @@ async function runTests() {
     if (data.objective.progress !== 37.5) {
       throw new Error(`Objective rollup progress should be 37.5%, got ${data.objective.progress}%`);
     }
+
+    // 4.5. Verify history logging
+    console.log('\nVerifying Key Result history query...');
+    const krHistory = await getKeyResultHistory(kr1.id);
+    console.log(`✅ KR1 History entries: ${krHistory.length} (Expected: 1)`);
+    if (krHistory.length !== 1) throw new Error(`Expected 1 history entry, got ${krHistory.length}`);
+    console.log(`History entry note: "${krHistory[0].note}" (Expected: "Completed the mid-quarter training cohort")`);
+    if (krHistory[0].note !== 'Completed the mid-quarter training cohort') {
+      throw new Error(`Expected note "Completed the mid-quarter training cohort", got "${krHistory[0].note}"`);
+    }
+
+    console.log('\nVerifying Objective history query...');
+    const objHistory = await getObjectiveHistory(testObjectiveId);
+    console.log(`✅ Objective History entries: ${objHistory.length} (Expected: 1)`);
+    if (objHistory.length !== 1) throw new Error(`Expected 1 history entry, got ${objHistory.length}`);
 
     // 5. Query objectives list
     console.log('\nListing objectives for engineering...');
