@@ -24,9 +24,114 @@ const toDate = (val: any): Date => {
   return new Date(val);
 };
 
+export interface ProjectionData {
+  quarterElapsed: number; // e.g. 84.6
+  expectedProgress: number; // e.g. 84.6
+  deficit: number; // expectedProgress - progress
+  alertLevel: 'info' | 'warning' | 'danger' | 'none';
+  message: string;
+}
+
+export function getProjection(quarter: string, progress: number): ProjectionData | undefined {
+  const match = quarter.match(/^(\d{4})-Q([1-4])$/);
+  if (!match) return undefined;
+
+  const year = parseInt(match[1], 10);
+  const qNum = parseInt(match[2], 10);
+
+  let startMonth = 0;
+  if (qNum === 2) startMonth = 3;
+  if (qNum === 3) startMonth = 6;
+  if (qNum === 4) startMonth = 9;
+
+  const startDate = new Date(Date.UTC(year, startMonth, 1));
+  const endDate = new Date(Date.UTC(year, startMonth + 3, 1));
+  const now = new Date();
+
+  const totalMs = endDate.getTime() - startDate.getTime();
+  const elapsedMs = now.getTime() - startDate.getTime();
+
+  if (elapsedMs < 0) {
+    return {
+      quarterElapsed: 0,
+      expectedProgress: 0,
+      deficit: 0,
+      alertLevel: 'none',
+      message: `Quarter ${quarter} has not started yet.`,
+    };
+  }
+
+  if (elapsedMs >= totalMs) {
+    const deficit = 100 - progress;
+    if (progress === 100) {
+      return {
+        quarterElapsed: 100,
+        expectedProgress: 100,
+        deficit: 0,
+        alertLevel: 'none',
+        message: `Quarter ${quarter} ended. OKR achieved!`,
+      };
+    }
+    return {
+      quarterElapsed: 100,
+      expectedProgress: 100,
+      deficit,
+      alertLevel: 'danger',
+      message: `Quarter ${quarter} has ended. OKR ended with a ${deficit.toFixed(1)}% deficit.`,
+    };
+  }
+
+  const quarterElapsed = Math.round((elapsedMs / totalMs) * 1000) / 10;
+  const expectedProgress = quarterElapsed;
+  const deficit = Math.round((expectedProgress - progress) * 10) / 10;
+
+  let alertLevel: 'info' | 'warning' | 'danger' | 'none' = 'none';
+  let message = '';
+
+  if (deficit <= 0) {
+    alertLevel = 'none';
+    message = `On track. Ahead of target progress by ${Math.abs(deficit).toFixed(1)}%.`;
+  } else if (deficit <= 10) {
+    alertLevel = 'info';
+    message = `On track. Slightly behind target progress by ${deficit.toFixed(1)}%.`;
+  } else if (deficit <= 25) {
+    alertLevel = 'warning';
+    message = `At risk. Behind target progress by ${deficit.toFixed(1)}%.`;
+  } else {
+    alertLevel = 'danger';
+    message = `Behind schedule. Significant deficit of ${deficit.toFixed(1)}% against expected progress.`;
+  }
+
+  return {
+    quarterElapsed,
+    expectedProgress,
+    deficit,
+    alertLevel,
+    message,
+  };
+}
+
+export function getCalculatedStatus(quarter: string, progress: number, fallback: OKRStatus): OKRStatus {
+  if (progress === 100) return 'achieved';
+  const projection = getProjection(quarter, progress);
+  if (!projection) return fallback;
+
+  if (projection.alertLevel === 'none' || projection.alertLevel === 'info') {
+    return 'on-track';
+  } else if (projection.alertLevel === 'warning') {
+    return 'at-risk';
+  } else {
+    return 'behind';
+  }
+}
+
 // Convert Firestore document data to Objective interface
 const docToObjective = (doc: any): Objective => {
   const data = doc.data();
+  const rawStatus = data.status as OKRStatus;
+  const progress = data.progress || 0;
+  const calculatedStatus = getCalculatedStatus(data.quarter, progress, rawStatus);
+
   return {
     id: doc.id,
     title: data.title,
@@ -34,8 +139,8 @@ const docToObjective = (doc: any): Objective => {
     department: data.department as Department,
     quarter: data.quarter,
     owner: data.owner,
-    status: data.status as OKRStatus,
-    progress: data.progress || 0,
+    status: calculatedStatus,
+    progress,
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
   };
@@ -90,7 +195,11 @@ export async function listObjectives(filters: {
 }
 
 // Retrieve a single objective and its key results
-export async function getObjective(id: string): Promise<{ objective: Objective; keyResults: KeyResult[] }> {
+export async function getObjective(id: string): Promise<{
+  objective: Objective;
+  keyResults: KeyResult[];
+  projection?: ProjectionData;
+}> {
   const objRef = db.collection('objectives').doc(id);
   const objSnap = await objRef.get();
 
@@ -105,8 +214,9 @@ export async function getObjective(id: string): Promise<{ objective: Objective; 
     .get();
 
   const keyResults = krSnap.docs.map(docToKeyResult);
+  const projection = getProjection(objective.quarter, objective.progress);
 
-  return { objective, keyResults };
+  return { objective, keyResults, projection };
 }
 
 // Create a new objective

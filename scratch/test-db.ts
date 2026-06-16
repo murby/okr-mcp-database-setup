@@ -72,6 +72,16 @@ async function runTests() {
     if (data.objective.progress !== 12.5) {
       throw new Error(`Objective rollup progress should be 12.5%, got ${data.objective.progress}%`);
     }
+    
+    console.log(`Objective dynamic status: "${data.objective.status}" (Expected: "behind")`);
+    console.log(`Objective projection: ${JSON.stringify(data.projection, null, 2)}`);
+    if (data.objective.status !== 'behind') {
+      throw new Error(`Objective status should be 'behind', got '${data.objective.status}'`);
+    }
+    if (!data.projection || data.projection.alertLevel !== 'danger') {
+      throw new Error(`Objective projection alertLevel should be 'danger'`);
+    }
+
 
     // 4. Update Key Result 1 progress
     console.log('\nUpdating Key Result 1 progress (upskilled 25 devs)...');
