@@ -151,6 +151,16 @@ Retrieve a list of all unique quarters represented in the database.
 ### 8. `list_departments`
 Retrieve the list of valid departments.
 
+### 9. `get_key_result_history`
+Retrieve the chronological history of progress updates and notes for a specific Key Result.
+- **Parameters**:
+  - `keyResultId` (string): The unique ID of the key result.
+
+### 10. `get_objective_history`
+Retrieve the chronological history of all progress updates and notes for all Key Results under an Objective.
+- **Parameters**:
+  - `objectiveId` (string): The unique ID of the objective.
+
 ---
 
 ## License
