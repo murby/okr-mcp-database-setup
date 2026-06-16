@@ -1,0 +1,327 @@
+import { Firestore, Timestamp } from '@google-cloud/firestore';
+import dotenv from 'dotenv';
+import { Objective, KeyResult, ProgressUpdate, Department, OKRStatus } from './types.js';
+
+dotenv.config();
+
+const projectId = process.env.FIRESTORE_PROJECT_ID || 'project-c0f57fde-e415-4f6a-a26';
+const databaseId = process.env.FIRESTORE_DATABASE_ID || 'okrs';
+
+// Initialize Firestore
+export const db = new Firestore({
+  projectId,
+  databaseId,
+});
+
+// Helper to convert Firestore Timestamps to JS Dates
+const toDate = (val: any): Date => {
+  if (val instanceof Timestamp) {
+    return val.toDate();
+  }
+  if (val && typeof val === 'object' && '_seconds' in val) {
+    return new Timestamp(val._seconds, val._nanoseconds).toDate();
+  }
+  return new Date(val);
+};
+
+// Convert Firestore document data to Objective interface
+const docToObjective = (doc: any): Objective => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    title: data.title,
+    description: data.description,
+    department: data.department as Department,
+    quarter: data.quarter,
+    owner: data.owner,
+    status: data.status as OKRStatus,
+    progress: data.progress || 0,
+    createdAt: toDate(data.createdAt),
+    updatedAt: toDate(data.updatedAt),
+  };
+};
+
+// Convert Firestore document data to KeyResult interface
+const docToKeyResult = (doc: any): KeyResult => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    objectiveId: data.objectiveId,
+    title: data.title,
+    description: data.description,
+    type: data.type,
+    startValue: data.startValue,
+    targetValue: data.targetValue,
+    currentValue: data.currentValue,
+    progress: data.progress || 0,
+    owner: data.owner,
+    source: data.source || 'manual',
+    updatedAt: toDate(data.updatedAt),
+  };
+};
+
+// Retrieve all objectives with optional filters
+export async function listObjectives(filters: {
+  department?: Department;
+  quarter?: string;
+  owner?: string;
+} = {}): Promise<Objective[]> {
+  let query: FirebaseFirestore.Query = db.collection('objectives');
+
+  if (filters.department) {
+    query = query.where('department', '==', filters.department);
+  }
+  if (filters.quarter) {
+    query = query.where('quarter', '==', filters.quarter);
+  }
+  if (filters.owner) {
+    query = query.where('owner', '==', filters.owner);
+  }
+
+  const snapshot = await query.get();
+  const objectives = snapshot.docs.map(docToObjective);
+
+  // Sort in memory to avoid requiring complex composite indexes
+  return objectives.sort((a, b) => {
+    const qCompare = (b.quarter || '').localeCompare(a.quarter || '');
+    if (qCompare !== 0) return qCompare;
+    return (a.department || '').localeCompare(b.department || '');
+  });
+}
+
+// Retrieve a single objective and its key results
+export async function getObjective(id: string): Promise<{ objective: Objective; keyResults: KeyResult[] }> {
+  const objRef = db.collection('objectives').doc(id);
+  const objSnap = await objRef.get();
+
+  if (!objSnap.exists) {
+    throw new Error(`Objective with ID ${id} not found.`);
+  }
+
+  const objective = docToObjective(objSnap);
+
+  const krSnap = await db.collection('key_results')
+    .where('objectiveId', '==', id)
+    .get();
+
+  const keyResults = krSnap.docs.map(docToKeyResult);
+
+  return { objective, keyResults };
+}
+
+// Create a new objective
+export async function createObjective(data: {
+  title: string;
+  description: string;
+  department: Department;
+  quarter: string;
+  owner: string;
+  status?: OKRStatus;
+}): Promise<Objective> {
+  const objRef = db.collection('objectives').doc();
+  const now = new Date();
+  
+  const newObjective: Omit<Objective, 'id'> = {
+    title: data.title,
+    description: data.description,
+    department: data.department,
+    quarter: data.quarter,
+    owner: data.owner,
+    status: data.status || 'on-track',
+    progress: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await objRef.set(newObjective);
+
+  return {
+    id: objRef.id,
+    ...newObjective,
+  };
+}
+
+// Create a new key result and trigger rollup
+export async function createKeyResult(data: {
+  objectiveId: string;
+  title: string;
+  description: string;
+  type: KeyResult['type'];
+  startValue: number;
+  targetValue: number;
+  currentValue: number;
+  owner: string;
+  source?: string;
+}): Promise<KeyResult> {
+  // Verify objective exists
+  const objRef = db.collection('objectives').doc(data.objectiveId);
+  const objSnap = await objRef.get();
+  if (!objSnap.exists) {
+    throw new Error(`Cannot create key result: Objective with ID ${data.objectiveId} does not exist.`);
+  }
+
+  const krRef = db.collection('key_results').doc();
+  const now = new Date();
+
+  // Calculate progress percentage
+  const range = data.targetValue - data.startValue;
+  let progress = 0;
+  if (range !== 0) {
+    progress = ((data.currentValue - data.startValue) / range) * 100;
+    progress = Math.max(0, Math.min(100, Math.round(progress * 100) / 100)); // clamp to 0-100, round to 2 decimals
+  } else {
+    progress = data.currentValue >= data.targetValue ? 100 : 0;
+  }
+
+  const newKR: Omit<KeyResult, 'id'> = {
+    objectiveId: data.objectiveId,
+    title: data.title,
+    description: data.description,
+    type: data.type,
+    startValue: data.startValue,
+    targetValue: data.targetValue,
+    currentValue: data.currentValue,
+    progress,
+    owner: data.owner,
+    source: data.source || 'manual',
+    updatedAt: now,
+  };
+
+  await krRef.set(newKR);
+
+  const keyResult = {
+    id: krRef.id,
+    ...newKR,
+  };
+
+  // Roll up to parent objective
+  await rollupObjectiveProgress(data.objectiveId);
+
+  return keyResult;
+}
+
+// Update progress of a key result and create a history log entry
+export async function updateKeyResultProgress(
+  keyResultId: string,
+  newValue: number,
+  note: string,
+  updatedBy: string
+): Promise<KeyResult> {
+  const krRef = db.collection('key_results').doc(keyResultId);
+  
+  const result = await db.runTransaction(async (transaction) => {
+    const krSnap = await transaction.get(krRef);
+    if (!krSnap.exists) {
+      throw new Error(`Key Result with ID ${keyResultId} not found.`);
+    }
+
+    const krData = krSnap.data() as Omit<KeyResult, 'id'>;
+    const now = new Date();
+
+    // Calculate new progress percentage
+    const range = krData.targetValue - krData.startValue;
+    let progress = 0;
+    if (range !== 0) {
+      progress = ((newValue - krData.startValue) / range) * 100;
+      progress = Math.max(0, Math.min(100, Math.round(progress * 100) / 100));
+    } else {
+      progress = newValue >= krData.targetValue ? 100 : 0;
+    }
+
+    // Update Key Result
+    transaction.update(krRef, {
+      currentValue: newValue,
+      progress,
+      updatedAt: now,
+    });
+
+    // Log update history entry
+    const updateRef = db.collection('progress_updates').doc();
+    const updateLog: Omit<ProgressUpdate, 'id'> = {
+      keyResultId,
+      objectiveId: krData.objectiveId,
+      value: newValue,
+      note,
+      updatedBy,
+      timestamp: now,
+    };
+    transaction.set(updateRef, updateLog);
+
+    return {
+      id: keyResultId,
+      ...krData,
+      currentValue: newValue,
+      progress,
+      updatedAt: now,
+    };
+  });
+
+  // Roll up to parent objective
+  await rollupObjectiveProgress(result.objectiveId);
+
+  return result;
+}
+
+// Recalculate and update the progress of an Objective based on its Key Results
+export async function rollupObjectiveProgress(objectiveId: string): Promise<void> {
+  const krSnap = await db.collection('key_results')
+    .where('objectiveId', '==', objectiveId)
+    .get();
+
+  const krs = krSnap.docs.map(doc => doc.data() as KeyResult);
+
+  let averageProgress = 0;
+  if (krs.length > 0) {
+    const sum = krs.reduce((acc, kr) => acc + (kr.progress || 0), 0);
+    averageProgress = Math.round((sum / krs.length) * 100) / 100;
+  }
+
+  const updateData: any = {
+    progress: averageProgress,
+    updatedAt: new Date(),
+  };
+
+  // If 100% achieved, auto-mark objective status as 'achieved'
+  if (averageProgress === 100) {
+    updateData.status = 'achieved';
+  }
+
+  await db.collection('objectives').doc(objectiveId).update(updateData);
+}
+
+// Retrieve list of unique quarters
+export async function listQuarters(): Promise<string[]> {
+  const snapshot = await db.collection('objectives').select('quarter').get();
+  const quarters = new Set<string>();
+  snapshot.docs.forEach(doc => {
+    const q = doc.data().quarter;
+    if (q) quarters.add(q);
+  });
+  return Array.from(quarters).sort().reverse();
+}
+
+// Delete an objective and its child key results
+export async function deleteObjective(id: string): Promise<void> {
+  const batch = db.batch();
+
+  // Delete key results
+  const krSnap = await db.collection('key_results')
+    .where('objectiveId', '==', id)
+    .get();
+  krSnap.docs.forEach(doc => {
+    batch.delete(doc.ref);
+  });
+
+  // Delete progress updates
+  const updateSnap = await db.collection('progress_updates')
+    .where('objectiveId', '==', id)
+    .get();
+  updateSnap.docs.forEach(doc => {
+    batch.delete(doc.ref);
+  });
+
+  // Delete the objective
+  batch.delete(db.collection('objectives').doc(id));
+
+  await batch.commit();
+}
