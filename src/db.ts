@@ -1,6 +1,6 @@
 import { Firestore, Timestamp } from '@google-cloud/firestore';
 import dotenv from 'dotenv';
-import { Objective, KeyResult, ProgressUpdate, Department, OKRStatus } from './types.js';
+import { Objective, KeyResult, ProgressUpdate, Department, OKRStatus, Integration, KRConnection } from './types.js';
 
 dotenv.config();
 
@@ -162,6 +162,8 @@ const docToKeyResult = (doc: any): KeyResult => {
     owner: data.owner,
     source: data.source || 'manual',
     updatedAt: toDate(data.updatedAt),
+    connectionIds: data.connectionIds || [],
+    combinationStrategy: data.combinationStrategy || 'sum',
   };
 };
 
@@ -262,6 +264,8 @@ export async function createKeyResult(data: {
   currentValue: number;
   owner: string;
   source?: string;
+  connectionIds?: string[];
+  combinationStrategy?: 'sum' | 'average' | 'min' | 'max';
 }): Promise<KeyResult> {
   // Verify objective exists
   const objRef = db.collection('objectives').doc(data.objectiveId);
@@ -295,6 +299,8 @@ export async function createKeyResult(data: {
     owner: data.owner,
     source: data.source || 'manual',
     updatedAt: now,
+    connectionIds: data.connectionIds || [],
+    combinationStrategy: data.combinationStrategy || 'sum',
   };
 
   await krRef.set(newKR);
@@ -469,4 +475,161 @@ export async function getObjectiveHistory(objectiveId: string): Promise<Progress
   const updates = snapshot.docs.map(docToProgressUpdate);
   return updates.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 }
+
+// Convert Firestore document data to Integration interface
+const docToIntegration = (doc: any): Integration => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    type: data.type,
+    name: data.name,
+    credentials: data.credentials || {},
+    createdAt: toDate(data.createdAt),
+    updatedAt: toDate(data.updatedAt),
+  };
+};
+
+// Convert Firestore document data to KRConnection interface
+const docToKRConnection = (doc: any): KRConnection => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    keyResultId: data.keyResultId,
+    integrationId: data.integrationId,
+    config: data.config || {},
+    currentValue: data.currentValue || 0,
+    updatedAt: toDate(data.updatedAt),
+  };
+};
+
+// List all integrations
+export async function listIntegrations(): Promise<Integration[]> {
+  const snapshot = await db.collection('integrations').get();
+  return snapshot.docs.map(docToIntegration);
+}
+
+// Retrieve a single integration by ID
+export async function getIntegration(id: string): Promise<Integration | undefined> {
+  const snap = await db.collection('integrations').doc(id).get();
+  if (!snap.exists) return undefined;
+  return docToIntegration(snap);
+}
+
+// Save or update an integration
+export async function saveIntegration(data: {
+  id: string;
+  type: Integration['type'];
+  name: string;
+  credentials: Record<string, any>;
+}): Promise<Integration> {
+  const ref = db.collection('integrations').doc(data.id);
+  const snap = await ref.get();
+  const now = new Date();
+
+  const integrationData: any = {
+    type: data.type,
+    name: data.name,
+    credentials: data.credentials,
+    updatedAt: now,
+  };
+
+  if (!snap.exists) {
+    integrationData.createdAt = now;
+    await ref.set(integrationData);
+  } else {
+    await ref.update(integrationData);
+  }
+
+  const updatedSnap = await ref.get();
+  return docToIntegration(updatedSnap);
+}
+
+// Delete an integration
+export async function deleteIntegration(id: string): Promise<void> {
+  await db.collection('integrations').doc(id).delete();
+}
+
+// List connections for a specific Key Result
+export async function listKRConnections(keyResultId: string): Promise<KRConnection[]> {
+  const snapshot = await db.collection('kr_connections')
+    .where('keyResultId', '==', keyResultId)
+    .get();
+  return snapshot.docs.map(docToKRConnection);
+}
+
+// Retrieve a single connection
+export async function getKRConnection(id: string): Promise<KRConnection | undefined> {
+  const snap = await db.collection('kr_connections').doc(id).get();
+  if (!snap.exists) return undefined;
+  return docToKRConnection(snap);
+}
+
+// Save or update a Key Result connection
+export async function saveKRConnection(data: {
+  id?: string;
+  keyResultId: string;
+  integrationId: string;
+  config: Record<string, any>;
+  currentValue?: number;
+}): Promise<KRConnection> {
+  const ref = data.id ? db.collection('kr_connections').doc(data.id) : db.collection('kr_connections').doc();
+  const now = new Date();
+
+  const connData: any = {
+    keyResultId: data.keyResultId,
+    integrationId: data.integrationId,
+    config: data.config,
+    currentValue: data.currentValue || 0,
+    updatedAt: now,
+  };
+
+  await ref.set(connData, { merge: true });
+
+  // Update Key Result's connectionIds array if it doesn't already contain this connection ID
+  const krRef = db.collection('key_results').doc(data.keyResultId);
+  await db.runTransaction(async (transaction) => {
+    const krSnap = await transaction.get(krRef);
+    if (krSnap.exists) {
+      const kr = krSnap.data() as KeyResult;
+      const connectionIds = kr.connectionIds || [];
+      if (!connectionIds.includes(ref.id)) {
+        transaction.update(krRef, {
+          connectionIds: [...connectionIds, ref.id],
+          updatedAt: now,
+        });
+      }
+    }
+  });
+
+  const updatedSnap = await ref.get();
+  return docToKRConnection(updatedSnap);
+}
+
+// Delete a Key Result connection
+export async function deleteKRConnection(id: string): Promise<void> {
+  const ref = db.collection('kr_connections').doc(id);
+  const snap = await ref.get();
+  
+  if (snap.exists) {
+    const data = snap.data() as KRConnection;
+    const keyResultId = data.keyResultId;
+    
+    // Remove from key result's connectionIds array
+    const krRef = db.collection('key_results').doc(keyResultId);
+    await db.runTransaction(async (transaction) => {
+      const krSnap = await transaction.get(krRef);
+      if (krSnap.exists) {
+        const kr = krSnap.data() as KeyResult;
+        const connectionIds = kr.connectionIds || [];
+        transaction.update(krRef, {
+          connectionIds: connectionIds.filter(cid => cid !== id),
+          updatedAt: new Date(),
+        });
+      }
+    });
+  }
+  
+  await ref.delete();
+}
+
 

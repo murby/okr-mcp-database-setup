@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OKR Integration Portal | Devpost</title>
+  <meta name="description" content="Configure and manage automated API integrations for Devpost OKRs. Connect HubSpot, ClickUp, Productboard, and Trello.">
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Style -->
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+  <!-- Ambient background glow elements -->
+  <div class="bg-glow glow-1"></div>
+  <div class="bg-glow glow-2"></div>
+
+  <header class="app-header">
+    <div class="header-container">
+      <div class="logo">
+        <i class="fa-solid fa-circle-nodes logo-icon"></i>
+        <h1>OKR Integration Portal</h1>
+      </div>
+      <div class="subtitle">Personal Admin Dashboard | Richard Murby</div>
+    </div>
+  </header>
+
+  <main class="app-container">
+    <!-- Section 1: Integration Settings -->
+    <section class="section-card">
+      <div class="section-header">
+        <div class="section-title">
+          <i class="fa-solid fa-plug-circle-check header-icon"></i>
+          <h2>Supported Systems & Data Sources</h2>
+        </div>
+        <span class="badge badge-info">Select APIs to connect</span>
+      </div>
+      <p class="section-desc">Manage API credentials for your external tools. Enabling a sandbox mode allows you to simulate data syncing with live-updating mock data.</p>
+      
+      <div class="integrations-grid" id="integrations-grid">
+        <!-- JavaScript will render the integrations here -->
+        <div class="loading-spinner-container">
+          <i class="fa-solid fa-spinner fa-spin spinner"></i>
+          <span>Loading integrations...</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 2: OKR Map -->
+    <section class="section-card">
+      <div class="section-header">
+        <div class="section-title">
+          <i class="fa-solid fa-compass-drafting header-icon"></i>
+          <h2>Objectives & Key Results</h2>
+        </div>
+        <div class="search-actions">
+          <button id="btn-sync-all" class="btn btn-secondary">
+            <i class="fa-solid fa-rotate sync-icon"></i> Sync All Connections
+          </button>
+        </div>
+      </div>
+      <p class="section-desc">Select a Key Result to configure its automated data sync connection. You can link a single Key Result to multiple data sources and combine them using math strategies.</p>
+      
+      <div class="objectives-list" id="objectives-list">
+        <!-- JavaScript will render the objectives here -->
+        <div class="loading-spinner-container">
+          <i class="fa-solid fa-spinner fa-spin spinner"></i>
+          <span>Loading objectives database...</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Dialog 1: Edit Integration Credentials -->
+  <dialog id="integration-dialog" class="glass-dialog">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <h3 id="integration-dialog-title">Configure Integration</h3>
+        <button class="btn-close-dialog" commandfor="integration-dialog" command="close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <form id="integration-form" class="dialog-form">
+        <input type="hidden" id="integration-id">
+        <input type="hidden" id="integration-type">
+        
+        <div class="form-group">
+          <label for="integration-name">Connection Name</label>
+          <input type="text" id="integration-name" required placeholder="e.g. HubSpot Production">
+          <span class="help-text">Give this connection a recognisable label.</span>
+        </div>
+
+        <!-- HubSpot credentials fields -->
+        <div class="credentials-fields" id="fields-hubspot" style="display: none;">
+          <div class="form-group">
+            <label for="hubspot-token">Access Token / API Key</label>
+            <input type="password" id="hubspot-token" placeholder="Enter HubSpot Private App Access Token or 'sandbox'">
+            <span class="help-text">Input <strong>sandbox</strong> to use simulated sales deals.</span>
+          </div>
+        </div>
+
+        <!-- ClickUp credentials fields -->
+        <div class="credentials-fields" id="fields-clickup" style="display: none;">
+          <div class="form-group">
+            <label for="clickup-token">Personal Access Token</label>
+            <input type="password" id="clickup-token" placeholder="pk_... or 'sandbox'">
+            <span class="help-text">ClickUp Token found in settings or input <strong>sandbox</strong>.</span>
+          </div>
+        </div>
+
+        <!-- Productboard credentials fields -->
+        <div class="credentials-fields" id="fields-productboard" style="display: none;">
+          <div class="form-group">
+            <label for="productboard-token">Public API Access Token</label>
+            <input type="password" id="productboard-token" placeholder="Enter Productboard API token or 'sandbox'">
+            <span class="help-text">API token from integrations menu or <strong>sandbox</strong>.</span>
+          </div>
+        </div>
+
+        <!-- Trello credentials fields -->
+        <div class="credentials-fields" id="fields-trello" style="display: none;">
+          <div class="form-group">
+            <label for="trello-key">API Developer Key</label>
+            <input type="text" id="trello-key" placeholder="Enter Trello Developer API Key">
+          </div>
+          <div class="form-group">
+            <label for="trello-token">Member Token</label>
+            <input type="password" id="trello-token" placeholder="Enter Trello Member Authorization Token or 'sandbox'">
+            <span class="help-text">Input <strong>sandbox</strong> in token field for simulated cards.</span>
+          </div>
+        </div>
+
+        <div class="dialog-actions">
+          <button type="button" class="btn btn-secondary" commandfor="integration-dialog" command="close">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Connection</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- Dialog 2: Connect Key Result to Sources -->
+  <dialog id="connections-dialog" class="glass-dialog connections-dialog-large">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <div>
+          <h3 id="connections-dialog-title">Connect Key Result</h3>
+          <p id="connections-dialog-subtitle" class="dialog-subtitle"></p>
+        </div>
+        <button class="btn-close-dialog" commandfor="connections-dialog" command="close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      
+      <div class="connections-manager-layout">
+        <!-- Left Pane: Current Mappings & Strategy -->
+        <div class="dialog-left-pane">
+          <h4>Current API Connections</h4>
+          <div class="active-connections-list" id="active-connections-list">
+            <!-- Rendered by JS -->
+          </div>
+
+          <div class="strategy-config-box">
+            <h4>Combination Strategy</h4>
+            <p class="box-desc">If multiple connections are linked, how should we calculate the final value?</p>
+            <div class="form-group">
+              <select id="combination-strategy-select">
+                <option value="sum">Sum (Add values together)</option>
+                <option value="average">Average (Arithmetic mean)</option>
+                <option value="min">Minimum value</option>
+                <option value="max">Maximum value</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Pane: Add New Connection Form -->
+        <div class="dialog-right-pane">
+          <h4>Add New Data Source</h4>
+          <form id="connection-form" class="connection-editor-form">
+            <input type="hidden" id="connection-kr-id">
+            
+            <div class="form-group">
+              <label for="connection-integration-select">Select Integration Source</label>
+              <select id="connection-integration-select" required>
+                <option value="">-- Choose Connection --</option>
+                <!-- Rendered by JS -->
+              </select>
+              <span class="help-text error-msg" id="integration-select-warning" style="display:none;">Configure credentials for this integration first!</span>
+            </div>
+
+            <!-- HubSpot Configuration Fields -->
+            <div class="connection-config-fields" id="config-hubspot" style="display: none;">
+              <div class="form-group">
+                <label for="hubspot-pipeline">Pipeline ID (Optional)</label>
+                <input type="text" id="hubspot-pipeline" placeholder="e.g. default (leave blank for all)">
+              </div>
+              <div class="form-group">
+                <label for="hubspot-stage">Deal Stage ID (Optional)</label>
+                <input type="text" id="hubspot-stage" placeholder="e.g. closedwon">
+              </div>
+              <div class="form-group">
+                <label for="hubspot-metric">Metric Type</label>
+                <select id="hubspot-metric">
+                  <option value="sum">Sum of Deal Amounts</option>
+                  <option value="count">Count of Deals</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="hubspot-field">Metric Property (Optional)</label>
+                <input type="text" id="hubspot-field" value="amount" placeholder="e.g. amount">
+              </div>
+            </div>
+
+            <!-- ClickUp Configuration Fields -->
+            <div class="connection-config-fields" id="config-clickup" style="display: none;">
+              <div class="form-group">
+                <label for="clickup-list">List ID</label>
+                <input type="text" id="clickup-list" placeholder="e.g. 901501234567">
+              </div>
+              <div class="form-group">
+                <label for="clickup-status">Task Status Filter</label>
+                <input type="text" id="clickup-status" value="complete" placeholder="e.g. complete or closed">
+              </div>
+              <div class="form-group">
+                <label for="clickup-metric">Metric Type</label>
+                <select id="clickup-metric">
+                  <option value="percentage">Percentage Progress (Closed / Total)</option>
+                  <option value="count">Count of Tasks matching status</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Productboard Configuration Fields -->
+            <div class="connection-config-fields" id="config-productboard" style="display: none;">
+              <div class="form-group">
+                <label for="productboard-status">Feature Status Name / ID (Optional)</label>
+                <input type="text" id="productboard-status" placeholder="e.g. Released or in-development">
+              </div>
+            </div>
+
+            <!-- Trello Configuration Fields -->
+            <div class="connection-config-fields" id="config-trello" style="display: none;">
+              <div class="form-group">
+                <label for="trello-list">List ID</label>
+                <input type="text" id="trello-list" placeholder="e.g. 5abbe4b7ddc3e248c160e1">
+                <span class="help-text">The Trello List ID containing cards you wish to count.</span>
+              </div>
+            </div>
+
+            <!-- Testing utility panel -->
+            <div class="test-panel" id="test-connection-panel" style="display: none;">
+              <button type="button" id="btn-test-connection" class="btn btn-secondary">
+                <i class="fa-solid fa-vial"></i> Test Query Configuration
+              </button>
+              <div id="test-connection-result" class="test-result-box" style="display: none;">
+                <!-- Output response from API -->
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="btn-save-connection" disabled>
+                <i class="fa-solid fa-link"></i> Link Data Source
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="dialog-actions-footer">
+        <button type="button" class="btn btn-primary" id="btn-close-connection-mgr" commandfor="connections-dialog" command="close">Done & Sync OKR</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Notification Toast -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Polyfills loader for declarative dialogs/popovers -->
+  <script type="module">
+    if (!('commandForElement' in HTMLButtonElement.prototype)) {
+      import('https://cdn.jsdelivr.net/npm/invokers-polyfill@latest/dist/index.min.js')
+        .then(() => console.log('Invoker Commands Polyfill loaded.'))
+        .catch(err => console.error('Error loading Invoker Commands fallback:', err));
+    }
+  </script>
+
+  <!-- Core App Logic -->
+  <script src="portal.js"></script>
+</body>
+</html>
