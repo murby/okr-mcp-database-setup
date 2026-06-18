@@ -58,6 +58,9 @@
           <h2>Objectives & Key Results</h2>
         </div>
         <div class="search-actions">
+          <button id="btn-launch-wizard" class="btn btn-primary" style="background: linear-gradient(135deg, var(--accent-violet), var(--accent-cyan)); border: none; margin-right: 0.75rem;">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Launch OKR Interview Wizard
+          </button>
           <button id="btn-sync-all" class="btn btn-secondary">
             <i class="fa-solid fa-rotate sync-icon"></i> Sync All Connections
           </button>
@@ -272,6 +275,359 @@
 
       <div class="dialog-actions-footer">
         <button type="button" class="btn btn-primary" id="btn-close-connection-mgr" commandfor="connections-dialog" command="close">Done & Sync OKR</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dialog 3: OKR Interview Wizard -->
+  <dialog id="okr-wizard-dialog" class="glass-dialog wizard-dialog-large">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <div>
+          <h3>OKR Guided Interview Wizard</h3>
+          <p class="dialog-subtitle">Configure your quarterly objectives, key results, and automation in a conversational walkthrough.</p>
+        </div>
+        <button class="btn-close-dialog" id="btn-close-wizard-top">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Step Indicator -->
+      <div class="wizard-steps-indicator">
+        <div class="step-indicator active" id="indicator-step-1">
+          <div class="step-num">1</div>
+          <div class="step-label">Objective</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step-indicator" id="indicator-step-2">
+          <div class="step-num">2</div>
+          <div class="step-label">Key Results</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step-indicator" id="indicator-step-3">
+          <div class="step-num">3</div>
+          <div class="step-label">Automation</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step-indicator" id="indicator-step-4">
+          <div class="step-num">4</div>
+          <div class="step-label">Review</div>
+        </div>
+      </div>
+
+      <!-- Step Content Panels -->
+      <div class="wizard-panels">
+        
+        <!-- Step 1: Objective Setup -->
+        <div class="wizard-panel active" id="panel-step-1">
+          <div class="wizard-row">
+            <div class="wizard-question-box">
+              <i class="fa-solid fa-circle-question question-icon"></i>
+              <h4>Let's define your main goal.</h4>
+              <p>Choose an existing Objective to modify/delete, or create a brand-new one for this quarter.</p>
+              
+              <div class="form-group" style="margin-top: 0.75rem;">
+                <label for="wizard-objective-select">Select Objective</label>
+                <select id="wizard-objective-select">
+                  <!-- JS populated -->
+                </select>
+              </div>
+
+              <div class="or-separator">
+                <span>OR</span>
+              </div>
+
+              <button type="button" class="btn btn-secondary btn-full" id="btn-wizard-new-obj">
+                <i class="fa-solid fa-plus"></i> Create New Objective
+              </button>
+            </div>
+
+            <div class="wizard-form-box" id="wizard-obj-form-container" style="display:none;">
+              <h4 id="wizard-obj-form-title">Objective Details</h4>
+              <form id="wizard-obj-form" class="dialog-form" onsubmit="event.preventDefault();">
+                <input type="hidden" id="wizard-obj-id">
+                
+                <div class="form-group">
+                  <label for="wizard-obj-title">Objective Title</label>
+                  <input type="text" id="wizard-obj-title" required placeholder="e.g. Accelerate Sales Pipeline growth">
+                </div>
+
+                <div class="form-group">
+                  <label for="wizard-obj-desc">Description</label>
+                  <textarea id="wizard-obj-desc" required placeholder="What does this objective accomplish? Why is it important?"></textarea>
+                </div>
+
+                <div class="wizard-form-row">
+                  <div class="form-group">
+                    <label for="wizard-obj-dept">Department</label>
+                    <select id="wizard-obj-dept" required>
+                      <option value="product">Product</option>
+                      <option value="project-management">Project Management</option>
+                      <option value="sales">Sales</option>
+                      <option value="engineering">Engineering</option>
+                      <option value="executive">Executive</option>
+                    </select>
+                  </div>
+                  
+                  <div class="form-group">
+                    <label for="wizard-obj-quarter">Quarter</label>
+                    <input type="text" id="wizard-obj-quarter" required placeholder="e.g. 2026-Q2">
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="wizard-obj-owner">Objective Owner</label>
+                  <input type="text" id="wizard-obj-owner" required placeholder="e.g. richard@devpost.com">
+                </div>
+
+                <div class="wizard-form-actions-row">
+                  <button type="button" class="btn btn-secondary" id="btn-save-wizard-obj">Save Objective Details</button>
+                  <button type="button" class="btn btn-danger" id="btn-delete-wizard-obj" style="display:none;">
+                    <i class="fa-solid fa-trash"></i> Delete Objective
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Key Results Setup -->
+        <div class="wizard-panel" id="panel-step-2">
+          <div class="wizard-layout-two-col">
+            <!-- Left: Current KRs list -->
+            <div class="wizard-list-pane">
+              <div class="pane-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                <h4>Key Results</h4>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-wizard-add-kr">
+                  <i class="fa-solid fa-plus"></i> Add KR
+                </button>
+              </div>
+              <div class="wizard-items-list" id="wizard-krs-list">
+                <!-- JS populated -->
+              </div>
+            </div>
+
+            <!-- Right: KR Edit Form -->
+            <div class="wizard-form-pane" id="wizard-kr-form-container" style="display:none;">
+              <h4 id="wizard-kr-form-title">Key Result Details</h4>
+              <form id="wizard-kr-form" class="dialog-form" onsubmit="event.preventDefault();">
+                <input type="hidden" id="wizard-kr-id">
+                
+                <div class="form-group">
+                  <label for="wizard-kr-title">Key Result Title</label>
+                  <input type="text" id="wizard-kr-title" required placeholder="e.g. Close 50 enterprise contracts">
+                </div>
+
+                <div class="form-group">
+                  <label for="wizard-kr-desc">Description</label>
+                  <textarea id="wizard-kr-desc" required placeholder="How will we measure this?"></textarea>
+                </div>
+
+                <div class="wizard-form-row">
+                  <div class="form-group">
+                    <label for="wizard-kr-type">Metric Type</label>
+                    <select id="wizard-kr-type" required>
+                      <option value="number">Number</option>
+                      <option value="percentage">Percentage (%)</option>
+                      <option value="currency">Currency ($)</option>
+                      <option value="boolean">Boolean (True/False)</option>
+                    </select>
+                  </div>
+                  
+                  <div class="form-group">
+                    <label for="wizard-kr-owner">KR Owner</label>
+                    <input type="text" id="wizard-kr-owner" required placeholder="Owner email/name">
+                  </div>
+                </div>
+
+                <div class="wizard-form-row" id="wizard-kr-values-row">
+                  <div class="form-group">
+                    <label for="wizard-kr-start">Start Value</label>
+                    <input type="number" id="wizard-kr-start" step="any" value="0">
+                  </div>
+                  
+                  <div class="form-group">
+                    <label for="wizard-kr-target">Target Value</label>
+                    <input type="number" id="wizard-kr-target" step="any" value="100">
+                  </div>
+
+                  <div class="form-group">
+                    <label for="wizard-kr-current">Current Value</label>
+                    <input type="number" id="wizard-kr-current" step="any" value="0">
+                  </div>
+                </div>
+
+                <div class="wizard-form-actions-row">
+                  <button type="button" class="btn btn-secondary" id="btn-save-wizard-kr">Save Key Result</button>
+                  <button type="button" class="btn btn-danger" id="btn-delete-wizard-kr" style="display:none;">
+                    <i class="fa-solid fa-trash"></i> Delete Key Result
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Connect Data Sources (Automation) -->
+        <div class="wizard-panel" id="panel-step-3">
+          <div class="wizard-layout-two-col">
+            <!-- Left: Select KR & Active connections -->
+            <div class="wizard-list-pane">
+              <h4>Choose a Key Result to Automate</h4>
+              <div class="form-group" style="margin-top: 1rem;">
+                <select id="wizard-conn-kr-select">
+                  <option value="">-- Choose Key Result --</option>
+                </select>
+              </div>
+
+              <div class="active-connections-box" style="margin-top: 1.5rem;">
+                <h5>Linked Data Sources</h5>
+                <div id="wizard-active-connections" class="wizard-sub-list" style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.5rem;">
+                  <!-- JS populated -->
+                </div>
+              </div>
+
+              <div class="strategy-config-box" style="margin-top: 1.5rem;">
+                <h5>Combination Strategy</h5>
+                <select id="wizard-strategy-select">
+                  <option value="sum">Sum (Add values together)</option>
+                  <option value="average">Average (Arithmetic mean)</option>
+                  <option value="min">Minimum value</option>
+                  <option value="max">Maximum value</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Right: Link new source form -->
+            <div class="wizard-form-pane" id="wizard-conn-form-pane" style="display:none;">
+              <h4>Connect Data Source</h4>
+              <form id="wizard-conn-form" class="connection-editor-form" onsubmit="event.preventDefault();">
+                
+                <div class="form-group">
+                  <label for="wizard-integration-select">Select Integration</label>
+                  <select id="wizard-integration-select" required>
+                    <option value="">-- Choose Connection --</option>
+                  </select>
+                  <span class="help-text error-msg" id="wizard-integration-warning" style="display:none;">Configure credentials for this integration first!</span>
+                </div>
+
+                <!-- HubSpot Config -->
+                <div class="wizard-conn-config" id="w-config-hubspot" style="display:none;">
+                  <div class="form-group">
+                    <label for="w-hubspot-pipeline">Pipeline ID (Optional)</label>
+                    <input type="text" id="w-hubspot-pipeline" placeholder="e.g. default">
+                  </div>
+                  <div class="form-group">
+                    <label for="w-hubspot-stage">Deal Stage ID (Optional)</label>
+                    <input type="text" id="w-hubspot-stage" placeholder="e.g. closedwon">
+                  </div>
+                  <div class="form-group">
+                    <label for="w-hubspot-metric">Metric Type</label>
+                    <select id="w-hubspot-metric">
+                      <option value="sum">Sum of Deal Amounts</option>
+                      <option value="count">Count of Deals</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- ClickUp Config -->
+                <div class="wizard-conn-config" id="w-config-clickup" style="display:none;">
+                  <div class="form-group">
+                    <label for="w-clickup-list">List ID</label>
+                    <input type="text" id="w-clickup-list" placeholder="e.g. 901501234567">
+                  </div>
+                  <div class="form-group">
+                    <label for="w-clickup-status">Task Status Filter</label>
+                    <input type="text" id="w-clickup-status" value="complete">
+                  </div>
+                  <div class="form-group">
+                    <label for="w-clickup-metric">Metric Type</label>
+                    <select id="w-clickup-metric">
+                      <option value="percentage">Percentage Progress (Closed / Total)</option>
+                      <option value="count">Count of Tasks matching status</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Productboard Config -->
+                <div class="wizard-conn-config" id="w-config-productboard" style="display:none;">
+                  <div class="form-group">
+                    <label for="w-productboard-status">Feature Status Name / ID (Optional)</label>
+                    <input type="text" id="w-productboard-status" placeholder="e.g. Released">
+                  </div>
+                </div>
+
+                <!-- Trello Config -->
+                <div class="wizard-conn-config" id="w-config-trello" style="display:none;">
+                  <div class="form-group">
+                    <label for="w-trello-list">List ID</label>
+                    <input type="text" id="w-trello-list" placeholder="List ID containing cards">
+                  </div>
+                </div>
+
+                <!-- Connection Explanation -->
+                <div class="form-group" style="margin-top: 1rem;">
+                  <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <label for="wizard-conn-explanation">Explain how they connect</label>
+                    <button type="button" class="btn btn-secondary btn-xs" id="btn-wizard-gen-explanation" style="font-size:0.75rem; padding:0.15rem 0.4rem; background:var(--accent-violet-glow); border-color:var(--accent-violet);">
+                      <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Generate
+                    </button>
+                  </div>
+                  <textarea id="wizard-conn-explanation" required placeholder="Write a short explanation of what this automation represents..." style="min-height:70px; margin-top:0.25rem;"></textarea>
+                </div>
+
+                <!-- Testing panel -->
+                <div class="test-panel" id="wizard-test-panel" style="display:none; margin-top: 1rem;">
+                  <button type="button" id="btn-wizard-test-conn" class="btn btn-secondary btn-full">
+                    <i class="fa-solid fa-vial"></i> Test Query Configuration
+                  </button>
+                  <div id="wizard-test-result" class="test-result-box" style="display:none; margin-top:0.5rem; padding:0.75rem; font-size:0.85rem; border-left:3px solid var(--accent-violet); background:var(--bg-secondary);"></div>
+                </div>
+
+                <div class="form-actions" style="margin-top: 1.25rem;">
+                  <button type="button" class="btn btn-primary btn-full" id="btn-wizard-save-conn" disabled>
+                    <i class="fa-solid fa-link"></i> Link & Save Data Source
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 4: Summary & Review -->
+        <div class="wizard-panel" id="panel-step-4">
+          <div class="wizard-summary-container" style="max-height: 400px; overflow-y: auto; padding: 1rem;">
+            <div class="wizard-summary-header" style="text-align:center; margin-bottom:1.5rem;">
+              <i class="fa-solid fa-circle-check summary-check-icon" style="font-size: 3rem; color: var(--status-on-track);"></i>
+              <h4 style="margin-top:0.5rem;">Objective Setup Complete!</h4>
+              <p style="color:var(--text-muted);">Review the details of your objective, key results, and automation settings below.</p>
+            </div>
+            
+            <div class="summary-details-card" style="background:var(--bg-secondary); border:1px solid var(--glass-border); border-radius:12px; padding:1.5rem;">
+              <h5 id="summary-obj-title" style="font-size:1.2rem; font-family:var(--font-display);">Objective Title</h5>
+              <p id="summary-obj-meta" style="font-size:0.85rem; color:var(--text-muted); margin-bottom: 0.75rem;"></p>
+              <p id="summary-obj-desc" style="border-top:1px solid var(--glass-border); padding-top:0.75rem;"></p>
+              
+              <div class="summary-krs-section" style="margin-top: 2rem;">
+                <h5 style="margin-bottom:1rem; font-size:1rem; border-bottom:1px solid var(--glass-border); padding-bottom:0.25rem;">Key Results & Automation</h5>
+                <div id="summary-krs-list" style="display:flex; flex-direction:column; gap:1rem;">
+                  <!-- JS populated -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Navigation Actions -->
+      <div class="wizard-footer">
+        <button type="button" class="btn btn-secondary" id="btn-wizard-cancel">Cancel</button>
+        <div class="wizard-footer-right">
+          <button type="button" class="btn btn-secondary" id="btn-wizard-back" style="display:none; margin-right: 0.5rem;">Back</button>
+          <button type="button" class="btn btn-primary" id="btn-wizard-next">Next</button>
+          <button type="button" class="btn btn-success" id="btn-wizard-finish" style="display:none; background:var(--status-on-track); border-color:var(--status-on-track);">Finish & Sync</button>
+        </div>
       </div>
     </div>
   </dialog>

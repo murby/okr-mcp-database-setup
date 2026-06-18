@@ -32,6 +32,7 @@ export interface KeyResult {
   updatedAt: Date;
   connectionIds?: string[];
   combinationStrategy?: 'sum' | 'average' | 'min' | 'max';
+  connections?: KRConnection[];
 }
 
 export interface ProgressUpdate {
@@ -77,6 +78,7 @@ export interface KRConnection {
     [key: string]: any;
   };
   currentValue: number;
+  explanation?: string;
   updatedAt: Date;
 }
 

@@ -16,6 +16,15 @@
 - [x] Set up Express API server in src/index.ts
 - [x] Create Web Config Portal (HTML/CSS/JS) in public directory
 - [x] Verify all integrations with mock testing and TypeScript build
+- [x] Update src/types.ts to support connection explanations
+- [x] Implement CRUD methods in src/db.ts (updateObjective, updateKeyResult, deleteKeyResult)
+- [x] Update Express server routes in src/index.ts to expose new CRUD endpoints and support explanations
+- [x] Add Wizard Dialog markup to public/index.html
+- [x] Implement styling and animations for the Wizard in public/index.css
+- [x] Implement JavaScript wizard flow, CRUD actions, and connection explanations in public/portal.js
+- [x] Build and verify the application locally
+- [x] Adjust wizard dialog styling, margins, padding, and height to resolve layout clipping issues
+
 
 
 
