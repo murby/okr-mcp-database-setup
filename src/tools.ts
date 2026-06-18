@@ -1,5 +1,6 @@
 import { Department, OKRStatus, KeyResultType } from './types.js';
 import * as db from './db.js';
+import { syncKeyResult } from './sync.js';
 
 // Define the schemas for our MCP tools
 export const TOOLS = [
@@ -206,6 +207,103 @@ export const TOOLS = [
       required: ['objectiveId'],
     },
   },
+  {
+    name: 'list_integrations',
+    description: 'List all configured data source integrations.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'configure_integration',
+    description: 'Create or update a data source integration (Hubspot, ClickUp, Productboard, Trello).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'Unique identifier for this integration (e.g. "hubspot-prod")',
+        },
+        type: {
+          type: 'string',
+          enum: ['hubspot', 'clickup', 'productboard', 'trello'],
+          description: 'The type of integration',
+        },
+        name: {
+          type: 'string',
+          description: 'User-friendly display name',
+        },
+        credentials: {
+          type: 'object',
+          description: 'Credentials required for the API (e.g. apiKey, accessToken, workspaceId)',
+          properties: {
+            apiKey: { type: 'string' },
+            accessToken: { type: 'string' },
+            clientId: { type: 'string' },
+            clientSecret: { type: 'string' },
+            workspaceId: { type: 'string' },
+          },
+        },
+      },
+      required: ['id', 'type', 'name', 'credentials'],
+    },
+  },
+  {
+    name: 'link_key_result_to_integration',
+    description: 'Link a Key Result to an integration with specific query configurations.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        keyResultId: {
+          type: 'string',
+          description: 'The ID of the target Key Result',
+        },
+        integrationId: {
+          type: 'string',
+          description: 'The ID of the integration configuration to use',
+        },
+        config: {
+          type: 'object',
+          description: 'API-specific query parameters (e.g. listId, boardId, stageId)',
+          properties: {
+            pipelineId: { type: 'string' },
+            stageId: { type: 'string' },
+            listId: { type: 'string' },
+            boardId: { type: 'string' },
+            statusFilter: { type: 'string' },
+            statusId: { type: 'string' },
+            metricType: { type: 'string', enum: ['count', 'sum', 'percentage'] },
+            metricField: { type: 'string' },
+          },
+        },
+        combinationStrategy: {
+          type: 'string',
+          enum: ['sum', 'average', 'min', 'max'],
+          description: 'Strategy for combining multiple data sources for this Key Result (default "sum")',
+        },
+      },
+      required: ['keyResultId', 'integrationId', 'config'],
+    },
+  },
+  {
+    name: 'sync_key_result_data',
+    description: 'Synchronize connected data sources for a Key Result and update its progress.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        keyResultId: {
+          type: 'string',
+          description: 'The ID of the Key Result to sync',
+        },
+        updatedBy: {
+          type: 'string',
+          description: 'The user or system triggering the sync',
+        },
+      },
+      required: ['keyResultId'],
+    },
+  },
 ];
 
 // Handles tool calls and maps to db operations
@@ -353,6 +451,79 @@ export async function handleToolCall(name: string, args: any): Promise<any> {
             {
               type: 'text',
               text: JSON.stringify(history, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'list_integrations': {
+        const integrations = await db.listIntegrations();
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(integrations, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'configure_integration': {
+        const integration = await db.saveIntegration({
+          id: args.id,
+          type: args.type,
+          name: args.name,
+          credentials: args.credentials,
+        });
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Integration configured successfully:\n${JSON.stringify(integration, null, 2)}`,
+            },
+          ],
+        };
+      }
+
+      case 'link_key_result_to_integration': {
+        // Create the connection doc
+        const connection = await db.saveKRConnection({
+          keyResultId: args.keyResultId,
+          integrationId: args.integrationId,
+          config: args.config,
+        });
+        // Update the key result's combination strategy if provided
+        if (args.combinationStrategy) {
+          const krRef = db.db.collection('key_results').doc(args.keyResultId);
+          await krRef.update({
+            combinationStrategy: args.combinationStrategy,
+            source: 'automated',
+            updatedAt: new Date(),
+          });
+        } else {
+          const krRef = db.db.collection('key_results').doc(args.keyResultId);
+          await krRef.update({
+            source: 'automated',
+            updatedAt: new Date(),
+          });
+        }
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Key Result linked to integration successfully:\n${JSON.stringify(connection, null, 2)}`,
+            },
+          ],
+        };
+      }
+
+      case 'sync_key_result_data': {
+        const updatedKR = await syncKeyResult(args.keyResultId, args.updatedBy || 'MCP Tool Sync');
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Key Result sync complete:\n${JSON.stringify(updatedKR, null, 2)}`,
             },
           ],
         };

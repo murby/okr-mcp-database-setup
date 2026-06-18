@@ -30,6 +30,8 @@ export interface KeyResult {
   owner: string;
   source: string; // e.g. "manual", "hubspot", "jira"
   updatedAt: Date;
+  connectionIds?: string[];
+  combinationStrategy?: 'sum' | 'average' | 'min' | 'max';
 }
 
 export interface ProgressUpdate {
@@ -41,3 +43,40 @@ export interface ProgressUpdate {
   updatedBy: string;
   timestamp: Date;
 }
+
+export interface Integration {
+  id: string;
+  type: 'hubspot' | 'clickup' | 'productboard' | 'trello';
+  name: string;
+  credentials: {
+    apiKey?: string;
+    accessToken?: string;
+    clientId?: string;
+    clientSecret?: string;
+    workspaceId?: string;
+    apiUrl?: string;
+    [key: string]: any;
+  };
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface KRConnection {
+  id: string;
+  keyResultId: string;
+  integrationId: string;
+  config: {
+    pipelineId?: string;
+    stageId?: string;
+    listId?: string;
+    boardId?: string;
+    statusFilter?: string;
+    statusId?: string;
+    metricType?: 'count' | 'sum' | 'percentage';
+    metricField?: string;
+    [key: string]: any;
+  };
+  currentValue: number;
+  updatedAt: Date;
+}
+

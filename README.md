@@ -105,9 +105,10 @@ List all objectives in the database.
   - `owner` (optional string): owner's name/email
 
 ### 2. `get_objective`
-Retrieve details of a specific objective and all of its associated key results.
+Retrieve details of a specific objective and all of its associated key results, along with time-based progress projections and timeline alerts.
 - **Parameters**:
   - `objectiveId` (string): The unique objective ID.
+- **Returns**: A JSON object containing `objective`, `keyResults`, and a `projection` metadata object (providing `quarterElapsed`, `expectedProgress`, `deficit`, `alertLevel`, and a descriptive `message`).
 
 ### 3. `create_objective`
 Create a new objective.
