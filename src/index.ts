@@ -66,6 +66,40 @@ app.get('/api/objectives', async (req, res) => {
   }
 });
 
+// Create new objective
+app.post('/api/objectives', async (req, res) => {
+  try {
+    const { title, description, department, quarter, owner, status } = req.body;
+    const obj = await db.createObjective({ title, description, department, quarter, owner, status });
+    res.json(obj);
+  } catch (err: any) {
+    console.error('Error creating objective:', err);
+    res.status(500).json({ error: err.message || err });
+  }
+});
+
+// Update objective
+app.put('/api/objectives/:id', async (req, res) => {
+  try {
+    const obj = await db.updateObjective(req.params.id, req.body);
+    res.json(obj);
+  } catch (err: any) {
+    console.error('Error updating objective:', err);
+    res.status(500).json({ error: err.message || err });
+  }
+});
+
+// Delete objective
+app.delete('/api/objectives/:id', async (req, res) => {
+  try {
+    await db.deleteObjective(req.params.id);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Error deleting objective:', err);
+    res.status(500).json({ error: err.message || err });
+  }
+});
+
 // 2. List all integrations
 app.get('/api/integrations', async (req, res) => {
   try {
@@ -111,11 +145,45 @@ app.get('/api/key-results/:krId/connections', async (req, res) => {
   }
 });
 
+// Create key result
+app.post('/api/key-results', async (req, res) => {
+  try {
+    const { objectiveId, title, description, type, startValue, targetValue, currentValue, owner, source, connectionIds, combinationStrategy } = req.body;
+    const kr = await db.createKeyResult({ objectiveId, title, description, type, startValue, targetValue, currentValue, owner, source, connectionIds, combinationStrategy });
+    res.json(kr);
+  } catch (err: any) {
+    console.error('Error creating key result:', err);
+    res.status(500).json({ error: err.message || err });
+  }
+});
+
+// Update key result
+app.put('/api/key-results/:id', async (req, res) => {
+  try {
+    const kr = await db.updateKeyResult(req.params.id, req.body);
+    res.json(kr);
+  } catch (err: any) {
+    console.error('Error updating key result:', err);
+    res.status(500).json({ error: err.message || err });
+  }
+});
+
+// Delete key result
+app.delete('/api/key-results/:id', async (req, res) => {
+  try {
+    const objectiveId = await db.deleteKeyResult(req.params.id);
+    res.json({ success: true, objectiveId });
+  } catch (err: any) {
+    console.error('Error deleting key result:', err);
+    res.status(500).json({ error: err.message || err });
+  }
+});
+
 // 6. Save connection
 app.post('/api/connections', async (req, res) => {
   try {
-    const { id, keyResultId, integrationId, config, combinationStrategy } = req.body;
-    const connection = await db.saveKRConnection({ id, keyResultId, integrationId, config });
+    const { id, keyResultId, integrationId, config, combinationStrategy, explanation } = req.body;
+    const connection = await db.saveKRConnection({ id, keyResultId, integrationId, config, explanation });
     
     // Update key result source and combination strategy
     const krRef = db.db.collection('key_results').doc(keyResultId);

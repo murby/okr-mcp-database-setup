@@ -215,7 +215,16 @@ export async function getObjective(id: string): Promise<{
     .where('objectiveId', '==', id)
     .get();
 
-  const keyResults = krSnap.docs.map(docToKeyResult);
+  const keyResults: KeyResult[] = [];
+  for (const doc of krSnap.docs) {
+    const kr = docToKeyResult(doc);
+    const conns = await listKRConnections(kr.id);
+    keyResults.push({
+      ...kr,
+      connections: conns,
+    });
+  }
+
   const projection = getProjection(objective.quarter, objective.progress);
 
   return { objective, keyResults, projection };
@@ -498,6 +507,7 @@ const docToKRConnection = (doc: any): KRConnection => {
     integrationId: data.integrationId,
     config: data.config || {},
     currentValue: data.currentValue || 0,
+    explanation: data.explanation || '',
     updatedAt: toDate(data.updatedAt),
   };
 };
@@ -571,6 +581,7 @@ export async function saveKRConnection(data: {
   integrationId: string;
   config: Record<string, any>;
   currentValue?: number;
+  explanation?: string;
 }): Promise<KRConnection> {
   const ref = data.id ? db.collection('kr_connections').doc(data.id) : db.collection('kr_connections').doc();
   const now = new Date();
@@ -582,6 +593,10 @@ export async function saveKRConnection(data: {
     currentValue: data.currentValue || 0,
     updatedAt: now,
   };
+
+  if (data.explanation !== undefined) {
+    connData.explanation = data.explanation;
+  }
 
   await ref.set(connData, { merge: true });
 
@@ -630,6 +645,150 @@ export async function deleteKRConnection(id: string): Promise<void> {
   }
   
   await ref.delete();
+}
+
+// Update an Objective
+export async function updateObjective(
+  id: string,
+  data: {
+    title?: string;
+    description?: string;
+    department?: Department;
+    quarter?: string;
+    owner?: string;
+    status?: OKRStatus;
+  }
+): Promise<Objective> {
+  const ref = db.collection('objectives').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    throw new Error(`Objective with ID ${id} not found.`);
+  }
+
+  const updateFields: any = {
+    ...data,
+    updatedAt: new Date(),
+  };
+
+  await ref.update(updateFields);
+
+  const updatedSnap = await ref.get();
+  return docToObjective(updatedSnap);
+}
+
+// Update a Key Result and trigger parent rollup
+export async function updateKeyResult(
+  id: string,
+  data: {
+    title?: string;
+    description?: string;
+    type?: KeyResult['type'];
+    startValue?: number;
+    targetValue?: number;
+    currentValue?: number;
+    owner?: string;
+    source?: string;
+    combinationStrategy?: 'sum' | 'average' | 'min' | 'max';
+  }
+): Promise<KeyResult> {
+  const ref = db.collection('key_results').doc(id);
+  
+  const result = await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (!snap.exists) {
+      throw new Error(`Key Result with ID ${id} not found.`);
+    }
+
+    const existing = snap.data() as KeyResult;
+    const startValue = data.startValue !== undefined ? data.startValue : existing.startValue;
+    const targetValue = data.targetValue !== undefined ? data.targetValue : existing.targetValue;
+    const currentValue = data.currentValue !== undefined ? data.currentValue : existing.currentValue;
+
+    // Calculate new progress percentage
+    const range = targetValue - startValue;
+    let progress = 0;
+    if (range !== 0) {
+      progress = ((currentValue - startValue) / range) * 100;
+      progress = Math.max(0, Math.min(100, Math.round(progress * 100) / 100));
+    } else {
+      progress = currentValue >= targetValue ? 100 : 0;
+    }
+
+    const now = new Date();
+    const updateFields: any = {
+      ...data,
+      progress,
+      updatedAt: now,
+    };
+
+    transaction.update(ref, updateFields);
+
+    // If currentValue is modified, log a progress update history log entry
+    if (data.currentValue !== undefined && data.currentValue !== existing.currentValue) {
+      const updateRef = db.collection('progress_updates').doc();
+      const updateLog: Omit<ProgressUpdate, 'id'> = {
+        keyResultId: id,
+        objectiveId: existing.objectiveId,
+        value: currentValue,
+        note: `Updated in KR configuration editor`,
+        updatedBy: 'Admin Portal',
+        timestamp: now,
+      };
+      transaction.set(updateRef, updateLog);
+    }
+
+    return {
+      ...existing,
+      ...updateFields,
+      id,
+      objectiveId: existing.objectiveId,
+    };
+  });
+
+  // Roll up to parent objective
+  await rollupObjectiveProgress(result.objectiveId);
+
+  return result;
+}
+
+// Delete a Key Result and associated progress updates and connection links
+export async function deleteKeyResult(id: string): Promise<string> {
+  const ref = db.collection('key_results').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    throw new Error(`Key Result with ID ${id} not found.`);
+  }
+
+  const krData = snap.data() as KeyResult;
+  const objectiveId = krData.objectiveId;
+
+  const batch = db.batch();
+
+  // Delete connections
+  const connSnap = await db.collection('kr_connections')
+    .where('keyResultId', '==', id)
+    .get();
+  connSnap.docs.forEach(doc => {
+    batch.delete(doc.ref);
+  });
+
+  // Delete progress updates
+  const updateSnap = await db.collection('progress_updates')
+    .where('keyResultId', '==', id)
+    .get();
+  updateSnap.docs.forEach(doc => {
+    batch.delete(doc.ref);
+  });
+
+  // Delete key result
+  batch.delete(ref);
+
+  await batch.commit();
+
+  // Roll up to parent objective progress
+  await rollupObjectiveProgress(objectiveId);
+
+  return objectiveId;
 }
 
 
